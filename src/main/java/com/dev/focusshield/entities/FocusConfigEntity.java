@@ -1,14 +1,15 @@
 package com.dev.focusshield.entities;
 
 
-import com.google.gson.annotations.SerializedName;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,12 +31,26 @@ public class FocusConfigEntity {
 
     private Integer durationMinutes;
 
-    private boolean isActive;
+    private boolean active;
 
+    @CreationTimestamp
     private LocalDateTime savedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
+
+    // Option 1 (Recommended for flexibility): Store customSelectors as a JSON String
+    // This requires a custom converter or handling JSON serialization/deserialization manually.
+    // This is the most flexible if you use `Map<String, String>` in your DTOs.
+    @Column(name = "custom_selectors", columnDefinition = "TEXT") // Use TEXT or JSONB (PostgreSQL)
+    private String customSelectorsJson; // Store as JSON string
+
+    @Column(name = "pause_start_time")
+    private LocalTime pauseStartTime;
+
+    @Column(name = "pause_end_time")
+    private LocalTime pauseEndTime;
+
 
 }

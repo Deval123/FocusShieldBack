@@ -15,7 +15,11 @@ public enum FocusShieldErrorCode {
     DATA_ERROR_EMAIL_ALREADY_TAKEN("409-002", "Email is already taken"),
     DATA_ERROR_DEFAULT_ROLE_NOT_FOUND("404-003", "Default role not found"),
     DATA_ERROR_UNKNOWN_CONSTRAINT("409-999", "A database constraint violation occurred"),
-    DATA_ERROR_INVALID_CREDENTIALS("401-001", "Invalid email or password");
+    DATA_ERROR_INVALID_CREDENTIALS("401-001", "Invalid email or password"),
+
+    // ⭐ NEW ERROR CODES ⭐
+    DATA_ERROR_JSON_CONVERSION("400-010", "Error during JSON data conversion."),
+    DATA_ERROR_INVALID_TIME_FORMAT("400-011", "Invalid time format provided.");
 
     private final String code;
     private final String label;

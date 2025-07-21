@@ -4,10 +4,7 @@ import com.dev.focusshield.config.JwtTokenProvider;
 import com.dev.focusshield.entities.RoleEntity;
 import com.dev.focusshield.entities.UserEntity;
 import com.dev.focusshield.exceptions.*;
-import com.dev.focusshield.model.LoginRequest;
-import com.dev.focusshield.model.RegisterRequest;
-import com.dev.focusshield.model.UpdateRequest;
-import com.dev.focusshield.model.User;
+import com.dev.focusshield.model.*;
 import com.dev.focusshield.repositories.RoleRepository;
 import com.dev.focusshield.repositories.UserRepository;
 import com.dev.focusshield.utils.PasswordEncryptionUtil;
@@ -194,16 +191,19 @@ public class UserServiceImpl implements UserService {
      * @throws IllegalArgumentException if the email is not found or the password does not match
      */
     @Override
-    public String login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request) {
         UserEntity user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new FocusShieldInvalidCredentials(DATA_ERROR_INVALID_CREDENTIALS));
 
         if (!passwordEncryptionUtil.matches(request.getPassword(), user.getPassword())) {
             throw new FocusShieldInvalidCredentials(DATA_ERROR_INVALID_CREDENTIALS);
         }
-
-        return jwtTokenProvider.generateToken(user);
+        var authResponse = new AuthResponse();
+        authResponse.setToken(jwtTokenProvider.generateToken(user));
+        authResponse.setUniversalId(user.getUniversalId());
+        return authResponse;
     }
+
 
     /**
      * Retrieves a user entity by email or throws a FocusShieldNotFoundException.

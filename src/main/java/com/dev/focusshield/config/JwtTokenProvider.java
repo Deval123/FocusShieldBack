@@ -17,56 +17,48 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID; // Import UUID
 import java.util.stream.Collectors;
 
 @Component
 public class JwtTokenProvider {
     private static final Logger logger = LoggerFactory.getLogger(JwtTokenProvider.class);
 
-    /**
-     * Clé secrète pour la signature du JWT, générée avec un algorithme HS512 sécurisé.
-     */
     private static final Key SECRET_KEY = Keys.secretKeyFor(SignatureAlgorithm.HS512);
 
-    /**
-     * Durée de validité du token en millisecondes, injectée depuis la configuration.
-     */
     @Value("${jwt.expiration.ms}")
     private long expirationTime;
 
-    /**
-     * Valide un token JWT en vérifiant sa signature et sa structure.
-     *
-     * @param token le token JWT à valider
-     * @return true si le token est valide, false sinon
-     */
     public boolean validateToken(String token) {
         try {
             Jwts.parserBuilder().setSigningKey(SECRET_KEY).build().parseClaimsJws(token);
             return true;
         } catch (Exception e) {
-            logger.error(" ❌❌ Échec de validation du token : {}", token);
+            logger.error(" ❌❌ Échec de validation du token : {}", token, e); // Log exception for debugging
             return false;
         }
     }
 
-    /**
-     * Extrait le nom d'utilisateur (subject) contenu dans un token JWT.
-     *
-     * @param token le token JWT
-     * @return le nom d'utilisateur (username) contenu dans le token
-     */
     public String getUsernameFromToken(String token) {
         return getClaimsFromToken(token).getSubject();
     }
 
-    /**
-     * Récupère la liste des rôles (authorities) contenus dans un token JWT.
-     *
-     * @param token le token JWT
-     * @return une liste de SimpleGrantedAuthority correspondant aux rôles de l'utilisateur,
-     *         ou une liste vide si le claim 'roles' est absent ou mal formé
-     */
+    // ⭐ Extract universalId from token ⭐
+    public UUID getUniversalIdFromToken(String token) {
+        Claims claims = getClaimsFromToken(token);
+        String universalIdString = claims.get("universalId", String.class); // Get universalId as String
+        if (universalIdString != null) {
+            try {
+                return UUID.fromString(universalIdString);
+            } catch (IllegalArgumentException e) {
+                logger.error("Invalid universalId format in token: {}", universalIdString, e);
+                return null; // Or throw a specific exception if universalId is mandatory
+            }
+        }
+        logger.warn("Claim 'universalId' not found in token or is null.");
+        return null;
+    }
+
     public List<SimpleGrantedAuthority> getAuthorities(String token) {
         Claims claims = getClaimsFromToken(token);
         Object rolesObject = claims.get("roles");
@@ -82,16 +74,10 @@ public class JwtTokenProvider {
                     .collect(Collectors.toList());
         } else {
             logger.warn("Le claim 'roles' est absent ou mal formé dans le token JWT");
-            return List.of();  // retourne une liste vide pour éviter NullPointerException
+            return List.of();
         }
     }
 
-    /**
-     * Extrait tous les claims (données) contenus dans un token JWT.
-     *
-     * @param token le token JWT
-     * @return l'objet Claims contenant les données du token
-     */
     private Claims getClaimsFromToken(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(SECRET_KEY)
@@ -100,17 +86,12 @@ public class JwtTokenProvider {
                 .getBody();
     }
 
-    /**
-     * Génère un token JWT pour un utilisateur donné, incluant email, username et rôles.
-     * Le token est signé avec une clé sécurisée et expirera après la durée configurée.
-     *
-     * @param user l'entité utilisateur pour laquelle générer le token
-     * @return la chaîne JWT signée et compacte
-     */
+    // ⭐ Generate Token METHOD: Add universalId to claims ⭐
     public String generateToken(UserEntity user) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("email", user.getEmail());
         claims.put("username", user.getUsername());
+        claims.put("universalId", user.getUniversalId().toString()); // Add universalId as String
 
         List<String> roleNames = user.getRoles().stream()
                 .map(RoleEntity::getRoleName)
@@ -120,21 +101,17 @@ public class JwtTokenProvider {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);
 
+        // Set subject to universalId or username, depending on your user principal strategy
+        // For simplicity, let's keep subject as username for now if that's what you use in SecurityContext
         return Jwts.builder()
                 .setClaims(claims)
+                .setSubject(user.getUsername()) // Typically the unique identifier for the subject
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(SECRET_KEY)
                 .compact();
     }
 
-    /**
-     * Valide un token JWT et retourne directement la liste des rôles sous forme d'authorities.
-     * En cas de token invalide ou expiré, retourne une liste vide.
-     *
-     * @param token le token JWT à valider et analyser
-     * @return la liste des SimpleGrantedAuthority extraites du token, ou une liste vide si invalide
-     */
     public List<SimpleGrantedAuthority> extractAuthoritiesFromToken(String token) {
         if (!validateToken(token)) {
             logger.warn("Token JWT invalide ou expiré");

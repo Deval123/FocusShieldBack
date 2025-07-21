@@ -1,9 +1,6 @@
 package com.dev.focusshield.controller.users;
 
-import com.dev.focusshield.model.LoginRequest;
-import com.dev.focusshield.model.RegisterRequest;
-import com.dev.focusshield.model.UpdateRequest;
-import com.dev.focusshield.model.User;
+import com.dev.focusshield.model.*;
 import com.dev.focusshield.service.users.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -18,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
 import java.util.UUID;
 
 import static com.dev.focusshield.utils.contants.ApiRoutes.*;
@@ -99,9 +95,9 @@ public class UserController {
             @ApiResponse(responseCode = "401", description = "Invalid credentials", content = @Content)
     })
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody @Valid LoginRequest request) {
-        String token = userService.login(request);
-        return ResponseEntity.ok(Map.of("token", token));
+    public ResponseEntity<AuthResponse> login(@RequestBody @Valid LoginRequest request) {
+        AuthResponse authResponse = userService.login(request);
+        return ResponseEntity.ok(authResponse);
     }
 
     /**

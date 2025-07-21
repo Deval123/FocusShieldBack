@@ -1,9 +1,6 @@
 package com.dev.focusshield.service.users;
 
-import com.dev.focusshield.model.LoginRequest;
-import com.dev.focusshield.model.RegisterRequest;
-import com.dev.focusshield.model.UpdateRequest;
-import com.dev.focusshield.model.User;
+import com.dev.focusshield.model.*;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 
@@ -21,5 +18,5 @@ public interface UserService {
 
     User unassignRoleToUser(String email, String role);
 
-    String login(@Valid LoginRequest request);
+    AuthResponse login(@Valid LoginRequest request);
 }

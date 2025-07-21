@@ -16,6 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.UUID; // Import UUID
 
 /**
  * Filtre de sécurité personnalisé qui intercepte chaque requête HTTP pour vérifier la présence d’un token JWT.
@@ -30,8 +31,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     /**
-     * Constructeur avec injection du fournisseur de token JWT.
+     * Constructeur avec injection du fournisseur de token JWT et des propriétés de sécurité.
      * @param jwtTokenProvider fournisseur de méthodes liées aux JWT
+     * @param securityProperties propriétés de configuration de la sécurité
      */
     public JwtAuthenticationFilter(JwtTokenProvider jwtTokenProvider, SecurityProperties securityProperties) {
         this.jwtTokenProvider = jwtTokenProvider;
@@ -39,58 +41,47 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Détermine si une requête ne doit pas être filtrée par ce filtre.
+     * Détermine si une requête ne doit pas être filtrée par ce filtre (ex: routes publiques).
      * @param request la requête HTTP
-     * @return true si l'URL est dans les routes publiques
+     * @return true si l'URL est dans les routes publiques, false sinon
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String requestUri = request.getRequestURI();
-        String contextPath = request.getContextPath(); // This should be /focus-shield-service/api/v1
+        String contextPath = request.getContextPath();
 
-        // Calculate the path once and store it in a final or effective final variable
-        final String pathForMatching = getString(requestUri, contextPath);
-
+        // Calculate the path once
+        final String pathForMatching = getPathForMatching(requestUri, contextPath);
 
         List<String> publicEndpoints = securityProperties.getFullPublicEndpoints();
 
         boolean isPublic = publicEndpoints.stream()
-                .anyMatch(pattern -> {
-                    // Use the effectively final 'pathForMatching' variable
-                    boolean match = pathMatcher.match(pattern, pathForMatching);
-                    if (match) {
-                        logger.debug("--- JWT Filter Match DEBUG --- Path '{}' MATCHES public pattern '{}'", pathForMatching, pattern);
-                    }
-                    return match;
-                });
+                .anyMatch(pattern -> pathMatcher.match(pattern, pathForMatching));
 
-        logger.info("--- JWT Filter Decision --- Request URI: '{}', Context Path: '{}', Path to match: '{}'. Should NOT filter: {}. Public Endpoints: {}",
+        logger.debug("--- JWT Filter Decision --- Request URI: '{}', Context Path: '{}', Path to match: '{}'. Should NOT filter: {}. Public Endpoints: {}",
                 requestUri, contextPath, pathForMatching, isPublic, publicEndpoints);
         return isPublic;
     }
 
-    @NotNull
-    private static String getString(String requestUri, String contextPath) {
-        final String pathForMatching; // Declare it as final or ensure a single assignment
-
-        String tempPath; // Use a temporary variable for intermediate calculations
-        if (requestUri.startsWith(contextPath)) {
-            tempPath = requestUri.substring(contextPath.length());
-        } else {
-            tempPath = requestUri;
+    /**
+     * Helper method to correctly extract the path relative to the context for matching.
+     */
+    private String getPathForMatching(String requestUri, String contextPath) {
+        String path = requestUri;
+        if (requestUri.startsWith(contextPath) && contextPath.length() > 1) { // Avoid removing leading '/' if contextPath is just "/"
+            path = requestUri.substring(contextPath.length());
         }
 
-        if (!tempPath.startsWith("/")) {
-            tempPath = "/" + tempPath;
+        if (!path.startsWith("/")) {
+            path = "/" + path;
         }
-        pathForMatching = tempPath; // Assign to the final variable only once
-        return pathForMatching;
+        return path;
     }
 
 
     /**
      * Filtrage principal : extrait le token JWT de l'en-tête Authorization,
-     * le valide, puis place l'utilisateur dans le contexte de sécurité.
+     * le valide, puis place l'utilisateur (son universalId) dans le contexte de sécurité.
      * @param request  requête HTTP
      * @param response réponse HTTP
      * @param filterChain chaîne de filtres à exécuter
@@ -98,20 +89,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * @throws IOException      en cas d’erreur IO
      */
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(@NotNull HttpServletRequest request, // Added @NotNull for clarity
+                                    @NotNull HttpServletResponse response,
+                                    @NotNull FilterChain filterChain) throws ServletException, IOException {
 
         logger.debug("🔍 JWT Filter triggered for path: {}", request.getRequestURI());
 
         String token = getTokenFromRequest(request);
+
         if (token != null && jwtTokenProvider.validateToken(token)) {
-            String username = jwtTokenProvider.getUsernameFromToken(token);
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(username, null, jwtTokenProvider.getAuthorities(token));
-            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-            logger.debug("✅ User '{}' authenticated via JWT for path: {}", username, request.getRequestURI());
+            // ⭐ CRUCIAL CHANGE 1: Get universalId instead of username ⭐
+            // You can get the username too if you need it for logging, but the principal should be the unique ID.
+            UUID universalId = jwtTokenProvider.getUniversalIdFromToken(token);
+
+            if (universalId != null) {
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                universalId.toString(), // ⭐ PRINCIPAL: Set the universalId (as String) here ⭐
+                                null, // Credentials are not needed after authentication
+                                jwtTokenProvider.getAuthorities(token) // User's authorities/roles
+                        );
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+                logger.debug("✅ User with Universal ID '{}' authenticated via JWT for path: {}", universalId, request.getRequestURI());
+            } else {
+                logger.warn("🚫 JWT token is valid but universalId claim is missing or invalid for path: {}", request.getRequestURI());
+            }
         } else {
             logger.warn("🚫 No valid JWT token found or token validation failed for path: {}", request.getRequestURI());
         }

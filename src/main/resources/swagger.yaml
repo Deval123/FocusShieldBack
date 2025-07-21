@@ -135,7 +135,7 @@ components:
             type: string
         durationMinutes:
           type: integer
-        isActive:
+        active:
           type: boolean
         savedAt:
           type: string
@@ -143,6 +143,17 @@ components:
         userId:
           type: string
           format: uuid
+        customSelectors:
+          type: object
+          additionalProperties:
+            type: string
+          description: JSON object for custom CSS selectors by site (key is site name, value is CSS selector string)
+        pauseStartTime: # Pour les horaires de pause
+          type: string
+          format: time # ou simple string si vous gérez juste 'HH:MM'
+        pauseEndTime:
+          type: string
+          format: time # ou simple string
 
     RegisterRequest:
       type: object
@@ -247,8 +258,21 @@ components:
             type: string
         durationMinutes:
           type: integer
-        isActive:
+        active:
           type: boolean
+        customSelectors: # Add this to the request schema
+          type: object
+          # Decide between explicit properties or additionalProperties here too,
+          # I strongly recommend additionalProperties for consistency and flexibility:
+          additionalProperties:
+            type: string
+          description: JSON object for custom CSS selectors by site
+        pauseStartTime:
+          type: string
+          format: time
+        pauseEndTime:
+          type: string
+          format: time
 
     RoleRequest:
       type: object
@@ -292,7 +316,12 @@ components:
       properties:
         token:
           type: string
-
+        universalId: # ← AJOUTONS CE CHAMP dans notre AuthResponse du backend pour passer universalId
+          type: string
+          format: uuid
+          required:
+            - token
+            - universalId
 paths:
   /api/v1/users:
     post:
